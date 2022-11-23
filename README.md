@@ -7,7 +7,7 @@
 1. 使用 Midway 内部提供的装饰器 api **listModule** 获取所有 entity，继而再用 orm api 获取数据库表的 columns。
 2. 使用 **listModule** 获取所有 controller，**getClassMetadata** 获取 class 元信息。
 3. 使用 Midway 路由表服务获取所有路由，并按照 prefix 分组。
-4. 按照路由前缀 "/admin/" 开头与否，分别进行收集，最后按照 module 分组。
+4. 按照 controller 逐个添加eps，路由前缀 "/admin/" 开头与否，分别进行收集，最后按照 module 分组。
 
 ```typescript
 {
@@ -28,5 +28,5 @@
 
 > 路由前缀自动生成规则为：/ controller 文件夹下的文件夹名或者文件名 / 模块文件夹名 / 方法名
 
-
+# 登录
 
