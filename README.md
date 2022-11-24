@@ -30,3 +30,42 @@
 
 # 登录
 
+路由：/admin/base/open/login
+
+功能实现：/src/modules/base/service/sys/login.ts
+
+## 验证码
+
+1. 使用 svg-captcha 生成验证码文本和 svg 字符串。
+2. 使用 uuid 生成唯一标识符 captchaId。
+3. 将 captchaId，验证码文本存入缓存，保留半小时。
+4. 将加工好的验证码 svg 字符串和 captchaId 返回前端。
+
+```typescript
+async captcha(...){
+  ...
+  // 返回 captchaId 和 svg
+  const result = {
+    captchaId: uuid(),
+    data: svg.data.replace(/"/g, "'"),
+  };
+  ...
+  // 缓存 captchaId，验证码文本
+  await this.cacheManager.set(
+    `verify:img:${result.captchaId}`,
+    svg.text.toLowerCase(),
+    { ttl: 1800 }
+  );
+  ...
+}
+```
+
+## jwt
+
+## 登入
+
+1. 使用 Midway validator 组件按照 LoginDTO 进行参数校验。
+2. 校验captcha。
+3. 
+
+## 登出
