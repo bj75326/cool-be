@@ -1,3 +1,104 @@
+# Midway ioc（简略）
+
+以下统一 Provider包装的类简称**注入类**，需要被注入类简称**目标类**。
+
+## @Provider
+
+Provider包装器在注入类上添加 metaData，用于在服务启动时被扫描到容器。
+
+```typescript
+export const class_key = 'ioc:tagged_class'
+
+export function Provider (identifier?: string, args?: Array<any>) {
+  return function (target: any) {
+    // 驼峰命名，这个的目标是，注解的时候退出不传，就用类名的驼峰式
+    identifier = identifier ?? camelcase(target.name);
+
+    Reflect.defineMetadata(class_key, // metaData 标记字符串
+      { 
+        id: identifier, // key，用来注册Ioc容器
+        args: args || [] // 实例化所需参数
+      }, 
+      target
+    );
+
+    return target;
+  }
+}
+```
+
+Container 容器类提供绑定方法
+
+```typescript
+export class Container {
+  bindMap = new Map()
+
+  // 绑定注入类信息
+  bind(identifier: string, registerClass: any, constructorArgs: any[]) {
+    this.bindMap.set(identifier, {registerClass, constructorArgs})
+  }
+  ...
+```
+
+load在启动时扫描，将注入类扫描存储到container map (演示只用单层目录扫描演示)。
+
+```typescript
+import { class_key } from './provider';
+
+export function load(container, path) {
+  const list = fs.readdirSync(path)
+  for (const file of list) {
+    if (/\.ts$/.test(file)) {
+      const exports = require(resolve(path, file))
+
+      for (const m in exports) {
+        const module = exports[m]
+        if (typeof module === 'function') {
+          const metadata = Reflect.getMetadata(class_key, module)
+          // register
+          if (metadata) {
+            container.bind(metadata.id, module, metadata.args)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## @Inject
+
+Inject包装器将目标类所有需要注入的变量信息添加到目标类的 metaData 内，
+
+```typescript
+export const props_key = 'ioc:inject_props'
+
+export function Inject () {
+  return function (target: any, targetKey: string) {  // target 目标类对象，targetKey 注入的变量名
+
+    const annotationTarget = target.constructor // annotationTarget 目标类
+    let props = {}
+    
+    if (Reflect.hasOwnMetadata(props_key, annotationTarget)) {
+      props = Reflect.getMetadata(props_key, annotationTarget)  // 是否已有元数据记录注入变量
+    }
+
+    props[targetKey] = {
+      value: targetKey
+    }
+
+    Reflect.defineMetadata(props_key, props, annotationTarget)
+  }
+}
+```
+
+Container 容器类提供 
+
+## @Controller
+
+## @Get 和 @Query
+
+
 # eps
 
 路由：/admin/base/open/eps
@@ -69,3 +170,4 @@ async captcha(...){
 3. 
 
 ## 登出
+
