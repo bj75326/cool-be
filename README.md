@@ -68,7 +68,7 @@ export function load(container, path) {
 
 ## @Inject
 
-Inject包装器将目标类所有需要注入的变量信息添加到目标类的 metaData 内，
+Inject包装器将目标类所有依赖注入信息添加到目标类的 metaData 内，
 
 ```typescript
 export const props_key = 'ioc:inject_props'
@@ -80,19 +80,47 @@ export function Inject () {
     let props = {}
     
     if (Reflect.hasOwnMetadata(props_key, annotationTarget)) {
-      props = Reflect.getMetadata(props_key, annotationTarget)  // 是否已有元数据记录注入变量
+      props = Reflect.getMetadata(props_key, annotationTarget)  // 目标类是否已有元数据记依赖注入变量
     }
 
     props[targetKey] = {
       value: targetKey
     }
 
-    Reflect.defineMetadata(props_key, props, annotationTarget)
+    Reflect.defineMetadata(props_key, props, annotationTarget)  // 将目标类所有依赖注入变量信息添加到目标类的 metaData 内
   }
 }
 ```
 
-Container 容器类提供 
+Container 容器类提供 get 方法，使目标类实例可以获取注入类实例。
+
+```typescript
+import { props_key } from './inject'
+
+export class Container {
+  ...
+  
+  get<T>(identifier: string): T { // 供目标类实例获取注入类实例
+    const target = this.bindMap.get(identifier)
+    if (target) {
+      const { registerClass, constructorArgs } = target // bindMap 内拿到注入类
+
+      // 等价于 const instance = new A([...constructorArgs]) // 假如 registerClass 为定义的类 A
+      // 对象实例化的另一种形式，new 前面须要跟大写的类名，而上面的形式能够不必，能够把一个类赋值给一个变量，通过变量实例化类
+      const instance = Reflect.construct(registerClass, constructorArgs) // 获取注入类实例
+
+      const props = Reflect.getMetadata(props_key, registerClass) // 获取注入类的依赖注入变量元数据
+      for (let prop in props) {
+        const identifier = props[prop].value
+        
+        instance[prop] = this.get(identifier) // 递归让注入类实例先获得它所有依赖注入的对象
+      }
+      return instance // 返回注入类实例给目标类实例
+    }
+  }
+}
+
+```
 
 ## @Controller
 
