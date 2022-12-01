@@ -1,17 +1,17 @@
 # Midway ioc（简略）
 
-以下统一 Provider包装的类简称**注入类**，需要被注入类简称**目标类**。
+以下统一 Provider 包装的类简称**注入类**，需要被注入类简称**目标类**。
 
 ## @Provider
 
-Provider包装器在注入类上添加 metaData，用于在服务启动时被扫描到容器。
+Provider 装饰器在注入类上添加 metaData，用于在服务启动时被扫描到容器。
 
 ```typescript
 export const class_key = 'ioc:tagged_class'
 
 export function Provider (identifier?: string, args?: Array<any>) {
   return function (target: any) {
-    // 驼峰命名，这个的目标是，注解的时候退出不传，就用类名的驼峰式
+    // 驼峰命名，这个的目的是，注解的时候退出不传，就用类名的驼峰式
     identifier = identifier ?? camelcase(target.name);
 
     Reflect.defineMetadata(class_key, // metaData 标记字符串
@@ -38,6 +38,7 @@ export class Container {
     this.bindMap.set(identifier, {registerClass, constructorArgs})
   }
   ...
+}
 ```
 
 load在启动时扫描，将注入类扫描存储到container map (演示只用单层目录扫描演示)。
@@ -68,13 +69,13 @@ export function load(container, path) {
 
 ## @Inject
 
-Inject包装器将目标类所有依赖注入信息添加到目标类的 metaData 内，
+Inject 装饰器将目标类所有依赖注入信息添加到目标类的 metaData 内，
 
 ```typescript
 export const props_key = 'ioc:inject_props'
 
 export function Inject () {
-  return function (target: any, targetKey: string) {  // target 目标类对象，targetKey 注入的变量名
+  return function (target: any, targetKey: string) {  // target 目标类，targetKey 注入的变量名
 
     const annotationTarget = target.constructor // annotationTarget 目标类
     let props = {}
@@ -124,8 +125,171 @@ export class Container {
 
 ## @Controller
 
+Controller 装饰器在被包装类上添加 metaData，其中包括前缀等，
+
+```typescript
+export const class_key = 'ioc:controller_class'
+
+export function Controller (prefix = '/') {
+  return function (target: any) {
+
+    const props = {
+      prefix
+    }
+
+    Reflect.defineMetadata(class_key, props, target)
+    return target
+  }
+}
+```
+
+之后 load 在启动应用时
+
+```typescript
+import { class_key } from './provider';
+import { class_key as controller_class_key } from './controller';
+import { props_key, params_key } from './request';
+
+const req_mthods_key = 'req_methods'
+const joinSymbol = '_|_'
+
+export function load(container, path, ctx) {
+  // 
+  const list = fs.readdirSync(path);
+
+  for (const file of list) {
+    if (/\.ts$/.test(file)) {
+      const exports = require(resolve(path, file));
+
+      for (const m in exports) {
+        const module = exports[m]
+        if (typeof module === 'function') {
+          const metadata = Reflect.getMetadata(class_key, module);
+
+          if (metadata) {
+            container.bind(metadata.id, module, metadata.args)
+            // 以上为容器扫描目录下 Provider 包装的所有类。
+
+            // 之后收集路径，方法和它们各自对应的控制类，处理函数和参数，并放入容器内
+            const controllerMetadata = Reflect.getMetadata(controller_class_key, module); 
+            if (controllerMetadata) {
+              const reqMethodMetadata = Reflect.getMetadata(props_key, module); // 获取控制器类上的方法元数据 [{method: 'GET', routerName, fn: targetKey}, ...] 
+              
+              if (reqMethodMetadata) {
+                const methods = container.getReq(req_mthods_key) || {};  
+                const reqMethodParamsMetadata = Reflect.getMetadata(params_key, module); // 获取控制器类上的参数元数据 {[targetKey] : [{type: 'query', index, paramName}, ...], ...}
+
+                reqMethodMetadata.forEach(item => {
+                  const path = controllerMetadata.prefix + item.routerName  // 补全路径
+                  // 收集路径，方法及对应的控制器类，具体的处理函数，参数信息 
+                  methods[item.method + joinSymbol + path] = {
+                    id: metadata.id, // Controll 类
+                    fn: item.fn, // Get 包装方法名
+                    args: reqMethodParamsMetadata ? reqMethodParamsMetadata[item.fn] || [] : [] // Get 方法的参数信息 [{type: 'query', index, paramName}, ...]
+                  }
+                });
+
+                container.bindReq(req_mthods_key, methods) // 放入容器内
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const reqMethods = container.getReq(req_mthods_key);
+
+  if (reqMethods) {
+    // ctx.req.url /api/c?id=12
+    const [urlPath, query] = ctx.req.url.split('?');
+    // key: request 方法 + 路径
+    const methodUrl = ctx.req.method + joinSymbol + urlPath;
+    // 依据 key 取出对应数据
+    const reqMethodData = reqMethods[methodUrl];
+    if (reqMethodData) {
+      const {id, fn, args} = reqMethodData;
+      let fnQueryParams = [];
+    
+      if (args.length) {  // 处理方法需要参数
+        const queryObj = queryParams(query) // 获取 query 字符串转化为对象
+        // 这儿先依据参数在函数中的地位进行排序，这儿只解决了 Query 的状况， 再依据参数名从查问对象中取出数据
+        fnQueryParams = args.sort((a, b) => a.index - b.index).filter(item => item.type === 'query').map(item => queryObj[item.paramName])
+      }
+
+      // 调用控制器类的具体处理函数，传入参数，生成响应
+      const res = container.get(id)[fn](...fnQueryParams);
+      ctx.res.end(JSON.stringify(res));
+    }
+  }
+}
+```
+
 ## @Get 和 @Query
 
+Get 装饰器收集方法，路径，处理函数名，放入当前控制类的元数据内。
+
+```typescript
+export const props_key = 'ioc:request_method';
+
+export function Get (path?: string) {
+  return function (target: any, targetKey: string) {  // target 控制器类，targetKey 装饰器包装的函数名
+    
+    const annotationTarget = target.constructor // 控制器类
+
+    let props = []
+    
+    if (Reflect.hasOwnMetadata(props_key, annotationTarget)) {
+      props = Reflect.getMetadata(props_key, annotationTarget)  // 检查当前控制器类 metaData 是否已经有相关方法记录
+    }
+
+    const routerName = path ?? '';  // 路由路径
+
+    props.push({  // [{method: 'GET', routerName, fn: targetKey}, ...] 
+      method: 'GET',
+      routerName,
+      fn: targetKey
+    }); 
+
+    Reflect.defineMetadata(props_key, props, annotationTarget);
+  }
+}
+```
+
+Guery 装饰器
+
+```typescript
+export const params_key = 'ioc:request_method_params'
+
+export function Query () {
+  return function (target: any, targetKey: string, index: number) { // target 控制器类, targetKey 装饰器包装的函数名，index 装饰的函数第几个参数
+    
+    const annotationTarget = target.constructor;  // 控制器类
+
+    const fn = target[targetKey]  // 装饰的函数
+    
+    const args = getParamNames(fn)  // 函数参数列表
+    
+    let paramName = '';  
+    if (fn.length === args.length && index < fn.length) {
+      paramName = args[index]; // 获取参数名
+    }
+
+    let props = {};
+    
+    if (Reflect.hasOwnMetadata(params_key, annotationTarget)) {
+      props = Reflect.getMetadata(params_key, annotationTarget); // 检查当前控制器类 metaData 是否已经有相关参数记录
+    }
+
+    const paramNames = props[targetKey] || [];
+    paramNames.push({type: 'query', index, paramName}); 
+
+    props[targetKey] = paramNames;  // {[targetKey] : [{type: 'query', index, paramName}, ...], ...} 存放到控制器类的 metaData
+
+    Reflect.defineMetadata(params_key, props, annotationTarget)
+  }
+}
+```
 
 # eps
 
