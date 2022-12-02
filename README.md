@@ -355,11 +355,22 @@ async captcha(...){
 
 ## jwt
 
+cool admin 使用 token 和 refreshToken 维护用户登录状态。
+
+token：无状态，时效2小时，
+refreshToken：有状态，时效30天，
+
 ## 登入
 
 1. 使用 Midway validator 组件按照 LoginDTO 进行参数校验。
-2. 校验captcha。
-3. 
+2. 校验 captcha。
+3. 校验用户账户密码。
+4. 校验用户角色。
+5. 生成 token，refreshToken。
+6. 保存用户相关信息至缓存。
+7. 返回 token，refreshToken 和各自有效时间。
 
 ## 登出
+
+# CRUD
 
