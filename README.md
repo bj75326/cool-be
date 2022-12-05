@@ -370,7 +370,44 @@ refreshToken：有状态，时效30天，
 6. 保存用户相关信息至缓存。
 7. 返回 token，refreshToken 和各自有效时间。
 
+
+
 ## 登出
+
+# 中间件
+
+cool admin 除了可以使用 midway 路由中间件和全局中间件外，也可以在模块目录设置模块中间件或者全局中间件
+
+以 base 模块 authority 中间件 和 log 中间件举例：
+
+## 配置
+
+/src/modules/base/config.ts
+```typescript
+import { BaseLogMiddleware } from './middleware/log';
+import { BaseAuthorityMiddleware } from './middleware/authority';
+
+export default () => {
+  return {
+    ...
+    // 中间件
+    globalMiddlewares: [BaseAuthorityMiddleware, BaseLogMiddleware],  
+    ...
+  };
+}
+```
+
+## authority 中间件
+
+1. 获取 token。
+2. 若访问路径不是 "/admin/" 开头，则直接进入下一个中间件。
+3. 若访问路径满足 ```new RegExp(`^${adminUrl}?.*/open/`)```，
+4. 若 username === 'admin' 为超管权限，则直接进入下一个中间件。
+5. 
+
+## log 中间件
+
+
 
 # CRUD
 
