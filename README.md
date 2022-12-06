@@ -399,15 +399,19 @@ export default () => {
 
 ## authority 中间件
 
-1. 获取 token。
+1. 获取 token，token info 包含 isRefresh，roleIds，username，userId，passwordVersion。
 2. 若访问路径不是 "/admin/" 开头，则直接进入下一个中间件。
-3. 若访问路径满足 ```new RegExp(`^${adminUrl}?.*/open/`)```，
-4. 若 username === 'admin' 为超管权限，则直接进入下一个中间件。
-5. 
+3. 若访问路径满足 `new RegExp('^(/admin/)?.*/open/')`，表明是不需要登录的访问，直接进入下一个中间件。
+4. 若 `username === 'admin'` 且为非刷新 token ，直接进入下一个中间件。
+5. 若访问路径满足 `new RegExp('^(/admin/)?.*/comm/')`，表明是所有角色都有权限的访问，直接进入下一个中间件。
+6. 若传的 token 为 refreshToken，则校验失败。
+7. 若 token info 的 passwordV 与缓存内的 passwordV 不一致，则校验失败。
+8. 若 token 与缓存中的 token 不一样，且配置为单点登录，返回401。
+9. 按照缓存内 perms 权限检测，若没有权限，返回403。
 
 ## log 中间件
 
-
+日志中间件
 
 # CRUD
 
